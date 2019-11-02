@@ -8,6 +8,4 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-void send_request(char str);
-
 #endif

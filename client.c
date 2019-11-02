@@ -1,10 +1,37 @@
 #include "client.h"
 
+int sockfd, portno;
+struct sockaddr_in serv_addr;
+
 int main(int argc, char *argv[])
 {
     if(argc != 5)
     {
         printf("command format should be: ./client -h [IP] -p [port]\n");
+        exit(1);
+    }
+    else
+    {
+        if(strcmp(argv[1], "-h") != 0 && strcmp(argv[3], "-p") != 0)
+        {
+            printf("command format should be: ./client -h [IP] -p [port]\n");
+            exit(1);
+        }
+    }
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(sockfd < 0)
+    {
+        printf("ERROR opening socket\n");
+        exit(1);
+    }
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    portno = atoi(argv[4]);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(portno);
+    serv_addr.sin_addr.s_addr = inet_addr(argv[2]);
+    if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        printf("ERROR connecting\n");
         exit(1);
     }
     char buffer[129], ch;
@@ -23,7 +50,8 @@ int main(int argc, char *argv[])
                         ch = getchar();
                         if(ch == '"')
                         {
-                            //send_request(buffer);
+                            //send
+                            send(sockfd, buffer, sizeof(buffer), 0);////
                             printf("%s\n", buffer);
                         }
                         else if(ch == '\n')
@@ -60,9 +88,6 @@ int main(int argc, char *argv[])
         }
         memset(buffer, 0, sizeof(buffer));
     }
+    close(sockfd);
     return 0;
-}
-void send_request(char str)
-{
-    //int sockfd, portno;
 }
