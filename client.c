@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0)
     {
-        printf("ERROR opening socket\n");
+        perror("ERROR opening socket");
         exit(1);
     }
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -31,63 +31,130 @@ int main(int argc, char *argv[])
     serv_addr.sin_addr.s_addr = inet_addr(argv[2]);
     if(connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
-        printf("ERROR connecting\n");
+        perror("ERROR connecting");
         exit(1);
     }
-    char buffer[129], ch;
-    while(scanf(" %128[^ \n]", buffer))
+    int ret;
+    char buffer[MAX_LEN], test_str[10];
+    pthread_t pth;
+    pthread_create(&pth, NULL, recv_result, NULL);
+    while(1)
     {
-        if(strcmp(buffer, "Query") == 0)
+        memset(buffer, 0, MAX_LEN);
+        memset(test_str, 0, sizeof(test_str));
+        readline(buffer);
+        ret = format_check(buffer);
+        if(ret == 1) 		// send Query
         {
-            while(1)
-            {
-                ch = getchar();
-                if(ch == '"')
-                {
-                    memset(buffer, 0, sizeof(buffer));
-                    if(scanf("%128[^\"\n]", buffer))
-                    {
-                        ch = getchar();
-                        if(ch == '"')
-                        {
-                            //send
-                            send(sockfd, buffer, sizeof(buffer), 0);////
-                            printf("%s\n", buffer);
-                        }
-                        else if(ch == '\n')
-                        {
-                            printf("QUERY_STRING should be enclose by \"\"\n");
-                            break;
-                        }
-                        else
-                        {
-                            printf("QUERY_STRING size > 128\n");
-                            while((ch = getchar()) != '\n');
-                            break;
-                        }
-                    }
-                }
-                else if(ch == ' ')
-                    continue;
-                else if(ch == '\n')
-                    break;
-                else
-                {
-                    printf("QUERY_STRING should be enclose by \"\"\n");
-                    while((ch = getchar()) != '\n');
-                    break;
-                }
-            }
+            printf("send result: %ld\n", send(sockfd, buffer, strlen(buffer), 0));
+            printf("success: %s\n", buffer);
         }
-        else if(strcmp(buffer, "exit") == 0)
+        else if(ret == 2)	// exit
             break;
-        else
-        {
-            printf("command not recognized\n");
-            while((ch = getchar()) != '\n');
-        }
-        memset(buffer, 0, sizeof(buffer));
     }
     close(sockfd);
     return 0;
+}
+void readline(char *str)
+{
+    char ch;
+    for(int i = 0; i < MAX_LEN-1; ++i)
+    {
+        ch = getchar();
+        if(ch == '\n')
+        {
+            str[i] = '\0';
+            return;
+        }
+        str[i] = ch;
+    }
+}
+int format_check(char *buffer)
+{
+    if(strcmp(buffer, "exit") == 0)
+        return 2;
+    int i, j;
+    char str[129];
+    for(i = 0; i < 129; ++i)
+    {
+        if(buffer[i] == ' ' || buffer[i] == '\0' || i == 128)
+        {
+            str[i] = '\0';
+            break;
+        }
+        else
+            str[i] = buffer[i];
+    }
+    printf("***%s\n", str);
+    if(strcmp(str, "Query") == 0)
+    {
+        while(i < MAX_LEN && buffer[i] == ' ')++i;
+        if(buffer[i] == '\0')
+        {
+            printf("query format: Query \"QUERY_STRING\"\n");
+            return -1;
+        }
+        while(i < MAX_LEN)
+        {
+            if(buffer[i] == '"')
+            {
+                ++i;
+                for(j = 0; j < 129; ++j, ++i)
+                {
+                    if(buffer[i] != '"' && buffer[i] != '\0')
+                        str[j] = buffer[i];
+                    else
+                    {
+                        str[j] = '\0';
+                        break;
+                    }
+                }
+                if(j == 129)
+                {
+                    printf("QUERY_STRING is longer than 128 bytes\n");
+                    return -1;
+                }
+                if(buffer[i] == '\0')
+                {
+                    printf("QUERY_STRING should be enclosed by \"\"\n");
+                    return -1;
+                }
+                else if(buffer[i] == '"')
+                    ++i;
+                printf("***%s\n", str);
+            }
+            else if(buffer[i] == '\0')
+                break;
+            else if(buffer[i] == ' ')
+                ++i;
+            else
+            {
+                printf("QUERY_STRING should be enclosed by \"\"\n");
+                return -1;
+            }
+        }
+        return 1;
+    }
+    else
+    {
+        printf("command not recognized\n");
+        return -1;
+    }
+}
+void *recv_result(void *arg)
+{
+    char buffer[1000];
+    int n;
+    while(1)
+    {
+        memset(buffer, 0, sizeof(buffer));
+        n = recv(sockfd, buffer, sizeof(buffer), 0);
+        if(n == 0)
+        {
+            printf("connection break, type \"exit\" to quit\n");
+            break;
+        }
+        printf("recv %d bytes: %s\n", n, buffer);
+    }
+    pthread_exit(NULL);
 }
