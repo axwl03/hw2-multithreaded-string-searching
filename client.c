@@ -46,8 +46,7 @@ int main(int argc, char *argv[])
         ret = format_check(buffer);
         if(ret == 1) 		// send Query
         {
-            printf("send result: %ld\n", send(sockfd, buffer, strlen(buffer), 0));
-            printf("success: %s\n", buffer);
+            send(sockfd, buffer, strlen(buffer), 0);
         }
         else if(ret == 2)	// exit
             break;
@@ -85,7 +84,6 @@ int format_check(char *buffer)
         else
             str[i] = buffer[i];
     }
-    printf("***%s\n", str);
     if(strcmp(str, "Query") == 0)
     {
         while(i < MAX_LEN && buffer[i] == ' ')++i;
@@ -121,7 +119,6 @@ int format_check(char *buffer)
                 }
                 else if(buffer[i] == '"')
                     ++i;
-                printf("***%s\n", str);
             }
             else if(buffer[i] == '\0')
                 break;
@@ -144,17 +141,15 @@ int format_check(char *buffer)
 void *recv_result(void *arg)
 {
     char buffer[1000];
-    int n;
     while(1)
     {
         memset(buffer, 0, sizeof(buffer));
-        n = recv(sockfd, buffer, sizeof(buffer), 0);
-        if(n == 0)
+        if(recv(sockfd, buffer, sizeof(buffer), 0) == 0)
         {
             printf("connection break, type \"exit\" to quit\n");
             break;
         }
-        printf("recv %d bytes: %s\n", n, buffer);
+        printf("%s", buffer);
     }
     pthread_exit(NULL);
 }

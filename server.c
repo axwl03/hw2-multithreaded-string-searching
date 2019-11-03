@@ -3,23 +3,10 @@
 int sockfd, newsockfd, portno;
 struct sockaddr_in serv_addr, cli_addr;
 socklen_t cli_len = sizeof(cli_addr);
+pthread_mutex_t lock;
 
 int main(int argc, char *argv[])
 {
-    /*test
-    LIST_INIT(&head);
-    push_back("hello");
-    push_back("hey");
-    struct entry *p;
-    for(p = head.lh_first; p != NULL; p = p->entries.le_next)
-    	printf("%s\n", p->request);
-    pop_front();
-    pop_front();
-    if(head.lh_first == NULL)
-    	printf("remove success\n");
-    push_back("hi");
-    printf("%s\n", rear->request);
-    //test*/
 
     if(argc != 7)
     {
@@ -34,6 +21,13 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
+    if(atoi(argv[6]) < 1 || atoi(argv[6]) > 50)
+    {
+        printf("the number of threads is limited between 1~50\n");
+        exit(1);
+    }
+    pthread_t pth[atoi(argv[6])];
+    pthread_mutex_init(&lock, NULL);
     LIST_INIT(&head);
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0)
@@ -62,7 +56,14 @@ int main(int argc, char *argv[])
         perror("ERROR accepting");
         exit(1);
     }
-    ////
+    for(int i = 0; i < atoi(argv[6]); ++i)
+    {
+        if(pthread_create(&pth[i], NULL, worker, NULL))
+        {
+            printf("ERROR pthread create\n");
+            exit(1);
+        }
+    }
     char buffer[MAX_LEN];
     while(1)
     {
@@ -72,12 +73,11 @@ int main(int argc, char *argv[])
         printf("%s\n", buffer);
         parse_message(buffer);
     }
-    ////
     close(sockfd);
     close(newsockfd);
     return 0;
 }
-void search(char *str)
+int search(char *str)
 {
     FILE *fp = fopen("test.txt", "r");
     if(!fp)
@@ -106,7 +106,7 @@ void search(char *str)
         }
     }
     fclose(fp);
-    printf("%d\n", match_count);
+    return match_count;
 }
 void push_back(char *str)
 {
@@ -181,6 +181,7 @@ void parse_message(char *buffer)
                 else if(buffer[i] == '"')
                     ++i;
                 printf("***%s\n", str);
+                push_back(str);
             }
             else if(buffer[i] == '\0')
                 break;
@@ -191,5 +192,31 @@ void parse_message(char *buffer)
     else
     {
         printf("command not recognized\n");
+    }
+}
+void *worker(void *arg)
+{
+    char request[129], reply[500];
+    int result;
+    memset(request, 0, sizeof(request));
+    memset(reply, 0, sizeof(reply));
+    while(1)
+    {
+        pthread_mutex_lock(&lock);
+        if(head.lh_first != NULL)
+        {
+            strcpy(request, head.lh_first->request);
+            pop_front();
+            pthread_mutex_unlock(&lock);
+            result = search(request);
+            if(result != 0)
+                sprintf(reply, "String: \"%s\"\nFile: r, Count: %d\n", request, search(request));
+            else
+                sprintf(reply, "String: \"%s\"\nFile: r, Count: Not found\n", request);
+            printf("%ld\n", send(newsockfd, reply, strlen(reply), 0));
+            memset(request, 0, sizeof(request));
+            memset(reply, 0, sizeof(reply));
+        }
+        pthread_mutex_unlock(&lock);
     }
 }

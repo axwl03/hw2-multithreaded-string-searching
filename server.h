@@ -8,9 +8,10 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/queue.h>
+#include <pthread.h>
 #define MAX_LEN 2000
 
-void search(char *str);
+int search(char *str);
 LIST_HEAD(listhead, entry) head;
 struct entry
 {
@@ -20,5 +21,6 @@ struct entry
 void push_back(char *str);
 void pop_front();
 void parse_message(char *buffer);
+void *worker(void *arg);
 
 #endif
