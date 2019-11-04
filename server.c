@@ -118,11 +118,13 @@ void push_back(char *str)
     }
     memset(np->request, 0, sizeof(np->request));
     strcpy(np->request, str);
+    pthread_mutex_lock(&lock);
     if(rear == NULL)
         LIST_INSERT_HEAD(&head, np, entries);
     else
         LIST_INSERT_AFTER(rear, np, entries);
     rear = np;
+    pthread_mutex_unlock(&lock);
 }
 void pop_front()
 {
@@ -217,6 +219,7 @@ void *worker(void *arg)
             memset(request, 0, sizeof(request));
             memset(reply, 0, sizeof(reply));
         }
-        pthread_mutex_unlock(&lock);
+        else
+            pthread_mutex_unlock(&lock);
     }
 }
