@@ -4,6 +4,8 @@ int sockfd, newsockfd, portno;
 struct sockaddr_in serv_addr, cli_addr;
 socklen_t cli_len = sizeof(cli_addr);
 pthread_mutex_t lock;
+char *root;
+DIR *d;
 
 int main(int argc, char *argv[])
 {
@@ -24,6 +26,13 @@ int main(int argc, char *argv[])
     if(atoi(argv[6]) < 1 || atoi(argv[6]) > 50)
     {
         printf("the number of threads is limited between 1~50\n");
+        exit(1);
+    }
+    root = argv[2];
+    d = opendir(root);
+    if(d == NULL)
+    {
+        printf("Could not open %s\n", root);
         exit(1);
     }
     pthread_t pth[atoi(argv[6])];
@@ -77,12 +86,12 @@ int main(int argc, char *argv[])
     close(newsockfd);
     return 0;
 }
-int search(char *str)
+int search(char *filename, char *str)
 {
-    FILE *fp = fopen("test.txt", "r");
+    FILE *fp = fopen(filename, "r");
     if(!fp)
     {
-        printf("Error opening file.\n");
+        printf("Error opening %s\n", filename);
         exit(1);
     }
     char ch;
@@ -199,7 +208,9 @@ void parse_message(char *buffer)
 void *worker(void *arg)
 {
     char request[129], reply[500];
-    int result;
+    int result, found;
+    struct dirent *dir;
+    struct stat buf;
     memset(request, 0, sizeof(request));
     memset(reply, 0, sizeof(reply));
     while(1)
@@ -210,14 +221,30 @@ void *worker(void *arg)
             strcpy(request, head.lh_first->request);
             pop_front();
             pthread_mutex_unlock(&lock);
-            result = search(request);
-            if(result != 0)
-                sprintf(reply, "String: \"%s\"\nFile: r, Count: %d\n", request, search(request));
-            else
-                sprintf(reply, "String: \"%s\"\nFile: r, Count: Not found\n", request);
-            printf("%ld\n", send(newsockfd, reply, strlen(reply), 0));
+            found = 0;
+            while((dir = readdir(d)) != NULL)
+            {
+                memset(&buf, 0, sizeof(buf));
+                stat(dir->d_name, &buf);
+                if(!S_ISDIR(buf.st_mode))
+                {
+                    result = search(dir->d_name, request);	//only current directory
+                    if(result != 0)
+                    {
+                        sprintf(reply, "String: \"%s\"\nFile: %s, Count: %d\n", request, dir->d_name, result);
+                        printf("%ld\n", send(newsockfd, reply, strlen(reply), 0));
+                        memset(reply, 0, sizeof(reply));
+                    }
+                    found += result;
+                }
+            }
+            if(found == 0)
+            {
+                sprintf(reply, "String: \"%s\"\nNot found\n", request);
+                printf("%ld\n", send(newsockfd, reply, strlen(reply), 0));
+                memset(reply, 0, sizeof(reply));
+            }
             memset(request, 0, sizeof(request));
-            memset(reply, 0, sizeof(reply));
         }
         else
             pthread_mutex_unlock(&lock);

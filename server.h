@@ -9,9 +9,11 @@
 #include <arpa/inet.h>
 #include <sys/queue.h>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #define MAX_LEN 2000
 
-int search(char *str);
+int search(char *filename, char *str);
 LIST_HEAD(listhead, entry) head;
 struct entry
 {
