@@ -5,11 +5,9 @@ struct sockaddr_in serv_addr, cli_addr;
 socklen_t cli_len = sizeof(cli_addr);
 pthread_mutex_t lock;
 char *root;
-DIR *d;
 
 int main(int argc, char *argv[])
 {
-
     if(argc != 7)
     {
         printf("command format should be: ./server -r [ROOT] -p [port] -n THREAD_NUMBER\n");
@@ -29,12 +27,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
     root = argv[2];
-    d = opendir(root);
-    if(d == NULL)
-    {
-        printf("Could not open %s\n", root);
-        exit(1);
-    }
     pthread_t pth[atoi(argv[6])];
     pthread_mutex_init(&lock, NULL);
     LIST_INIT(&head);
@@ -207,10 +199,14 @@ void parse_message(char *buffer)
 }
 void *worker(void *arg)
 {
-    char request[129], reply[500];
+    char request[129], reply[500], path[100], current_dir[100], temp[100];
     int result, found;
+    DIR *d;
     struct dirent *dir;
     struct stat buf;
+    struct dir_listhead dir_head;
+    LIST_INIT(&dir_head);
+    struct dir_entry *np;
     memset(request, 0, sizeof(request));
     memset(reply, 0, sizeof(reply));
     while(1)
@@ -221,29 +217,72 @@ void *worker(void *arg)
             strcpy(request, head.lh_first->request);
             pop_front();
             pthread_mutex_unlock(&lock);
+            sprintf(reply, "String: \"%s\"\n", request);
             found = 0;
-            while((dir = readdir(d)) != NULL)
+            memset(current_dir, 0, sizeof(current_dir));
+            strncpy(current_dir, root, sizeof(current_dir)-1);
+            while(1)
             {
-                memset(&buf, 0, sizeof(buf));
-                stat(dir->d_name, &buf);
-                if(!S_ISDIR(buf.st_mode))
+                d = opendir(current_dir);
+                if(d)
                 {
-                    result = search(dir->d_name, request);	//only current directory
-                    if(result != 0)
+                    while((dir = readdir(d)) != NULL)
                     {
-                        sprintf(reply, "String: \"%s\"\nFile: %s, Count: %d\n", request, dir->d_name, result);
-                        printf("%ld\n", send(newsockfd, reply, strlen(reply), 0));
-                        memset(reply, 0, sizeof(reply));
+                        memset(&buf, 0, sizeof(buf));
+                        strcpy(path, current_dir);
+                        strncat(path, "/", sizeof(path)-strlen(path)-1);
+                        stat(strncat(path, dir->d_name, sizeof(path)-strlen(path)-1), &buf);
+                        if(S_ISDIR(buf.st_mode) && strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0)
+                        {
+                            strcpy(path, current_dir);
+                            strncat(path, "/", sizeof(path)-strlen(path)-1);
+                            strncat(path, dir->d_name, sizeof(path)-strlen(path)-1);
+                            np = malloc(sizeof(struct dir_entry));
+                            if(!np)
+                            {
+                                printf("malloc failed\n");
+                                exit(1);
+                            }
+                            strcpy(np->dir_name, path);
+                            LIST_INSERT_HEAD(&dir_head, np, dir_entries);
+                        }
+                        else if(S_ISREG(buf.st_mode))
+                        {
+                            // read file and search
+                            printf("search %s\n", path);
+                            result = search(path, request);
+                            printf("%d\n", result);
+                            if(result != 0)
+                            {
+                                sprintf(temp, "File: %s, Count: %d\n", path, result);
+                                strncat(reply, temp, sizeof(reply)-strlen(reply)-1);
+                                //printf("send: %ld bytes\n", send(newsockfd, reply, strlen(reply), 0));
+                                //memset(reply, 0, sizeof(reply));
+                            }
+                            found += result;
+                        }
                     }
-                    found += result;
                 }
+                else
+                {
+                    printf("could not open %s\n", current_dir);
+                    break;
+                }
+                closedir(d);
+                if(dir_head.lh_first != NULL)
+                {
+                    strcpy(current_dir, dir_head.lh_first->dir_name);
+                    LIST_REMOVE(dir_head.lh_first, dir_entries);
+                }
+                else break;
             }
             if(found == 0)
             {
-                sprintf(reply, "String: \"%s\"\nNot found\n", request);
-                printf("%ld\n", send(newsockfd, reply, strlen(reply), 0));
-                memset(reply, 0, sizeof(reply));
+                strncat(reply, "Not found\n", sizeof(reply)-strlen(reply)-1);
+                //memset(reply, 0, sizeof(reply));
             }
+            printf("send: %ld bytes\n", send(newsockfd, reply, strlen(reply), 0));
+            memset(reply, 0, sizeof(reply));
             memset(request, 0, sizeof(request));
         }
         else
