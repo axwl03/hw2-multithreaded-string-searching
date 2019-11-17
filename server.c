@@ -48,15 +48,9 @@ int main(int argc, char *argv[])
         perror("ERROR binding socket");
         exit(1);
     }
-    if(listen(sockfd, 5) < 0)
+    if(listen(sockfd, MAX_CLIENT) < 0)
     {
         perror("ERROR listening");
-        exit(1);
-    }
-    newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &cli_len);
-    if(newsockfd < 0)
-    {
-        perror("ERROR accepting");
         exit(1);
     }
     for(int i = 0; i < atoi(argv[6]); ++i)
@@ -67,17 +61,24 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
-    char buffer[MAX_LEN];
-    while(1)
+    pthread_t client_service_th[MAX_CLIENT];
+    for(int i = MAX_CLIENT; i > 0; --i)
     {
-        memset(buffer, 0, sizeof(buffer));
-        if(recv(newsockfd, buffer, sizeof(buffer)-1, 0) == 0)
-            break;
-        printf("%s\n", buffer);
-        parse_message(buffer);
+        newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &cli_len);
+        if(newsockfd < 0)
+        {
+            perror("ERROR accepting");
+            exit(1);
+        }
+        if(pthread_create(&client_service_th[i-1], NULL, client_service, NULL))
+        {
+            printf("ERROR pthread create\n");
+            exit(1);
+        }
     }
+    for(int i = 0; i < MAX_CLIENT; ++i)
+        pthread_join(client_service_th[i], NULL);
     close(sockfd);
-    close(newsockfd);
     return 0;
 }
 int search(char *filename, char *str)
@@ -111,7 +112,7 @@ int search(char *filename, char *str)
     fclose(fp);
     return match_count;
 }
-void push_back(char *str)
+void push_back(int sockfd_temp, char *str)
 {
     struct entry *np = malloc(sizeof(struct entry));
     if(np == NULL)
@@ -121,6 +122,7 @@ void push_back(char *str)
     }
     memset(np->request, 0, sizeof(np->request));
     strcpy(np->request, str);
+    np->sockfd = sockfd_temp;
     pthread_mutex_lock(&lock);
     if(rear == NULL)
         LIST_INSERT_HEAD(&head, np, entries);
@@ -136,7 +138,7 @@ void pop_front()
     if(head.lh_first == NULL)
         rear = NULL;
 }
-void parse_message(char *buffer)
+void parse_message(int sockfd_temp, char *buffer)
 {
     int i, j;
     char str[129];
@@ -185,8 +187,7 @@ void parse_message(char *buffer)
                 }
                 else if(buffer[i] == '"')
                     ++i;
-                printf("***%s\n", str);
-                push_back(str);
+                push_back(sockfd_temp, str);
             }
             else if(buffer[i] == '\0')
                 break;
@@ -202,7 +203,7 @@ void parse_message(char *buffer)
 void *worker(void *arg)
 {
     char request[129], reply[500], path[100], current_dir[100], temp[100], temp2[100];
-    int result, found;
+    int result, found, sockfd_temp;
     DIR *d;
     struct dirent *dir;
     struct stat buf;
@@ -217,6 +218,7 @@ void *worker(void *arg)
         if(head.lh_first != NULL)
         {
             strcpy(request, head.lh_first->request);
+            sockfd_temp = head.lh_first->sockfd;
             pop_front();
             pthread_mutex_unlock(&lock);
             sprintf(reply, "String: \"%s\"\n", request);
@@ -251,9 +253,7 @@ void *worker(void *arg)
                         else if(S_ISREG(buf.st_mode))
                         {
                             // read file and search
-                            printf("search %s\n", path);
                             result = search(path, request);
-                            printf("%d\n", result);
                             if(result != 0)
                             {
                                 strcpy(temp2, ".");
@@ -280,11 +280,26 @@ void *worker(void *arg)
             }
             if(found == 0)
                 strncat(reply, "Not found\n", sizeof(reply)-strlen(reply)-1);
-            printf("send: %ld bytes\n", send(newsockfd, reply, strlen(reply), 0));
+            send(sockfd_temp, reply, strlen(reply), 0);
             memset(reply, 0, sizeof(reply));
             memset(request, 0, sizeof(request));
         }
         else
             pthread_mutex_unlock(&lock);
     }
+}
+void *client_service(void *arg)
+{
+    int sockfd_temp = newsockfd;
+    char buffer[MAX_LEN];
+    while(1)
+    {
+        memset(buffer, 0, sizeof(buffer));
+        if(recv(sockfd_temp, buffer, sizeof(buffer)-1, 0) == 0)
+            break;
+        printf("%s\n", buffer);
+        parse_message(sockfd_temp, buffer);
+    }
+    close(sockfd_temp);
+    pthread_exit(NULL);
 }

@@ -12,12 +12,14 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #define MAX_LEN 2000
+#define MAX_CLIENT 10
 
 int search(char *filename, char *str);
 LIST_HEAD(listhead, entry) head;
 LIST_HEAD(dir_listhead, dir_entry);
 struct entry
 {
+    int sockfd;
     char request[129];
     LIST_ENTRY(entry) entries;
 } *rear;
@@ -26,9 +28,10 @@ struct dir_entry
     char dir_name[100];
     LIST_ENTRY(dir_entry) dir_entries;
 };
-void push_back(char *str);
+void push_back(int sockfd_temp, char *str);
 void pop_front();
-void parse_message(char *buffer);
+void parse_message(int sockfd_temp, char *buffer);
 void *worker(void *arg);
+void *client_service(void *arg);
 
 #endif
