@@ -27,6 +27,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
     root = argv[2];
+    if(root[strlen(root)-1] == '/')
+        root[strlen(root)-1] = '\0';
     pthread_t pth[atoi(argv[6])];
     pthread_mutex_init(&lock, NULL);
     LIST_INIT(&head);
@@ -199,7 +201,7 @@ void parse_message(char *buffer)
 }
 void *worker(void *arg)
 {
-    char request[129], reply[500], path[100], current_dir[100], temp[100];
+    char request[129], reply[500], path[100], current_dir[100], temp[100], temp2[100];
     int result, found;
     DIR *d;
     struct dirent *dir;
@@ -254,10 +256,10 @@ void *worker(void *arg)
                             printf("%d\n", result);
                             if(result != 0)
                             {
-                                sprintf(temp, "File: %s, Count: %d\n", path, result);
+                                strcpy(temp2, ".");
+                                strncat(temp2, &path[strlen(root)], sizeof(temp2)-2);
+                                sprintf(temp, "File: %s, Count: %d\n", temp2, result);
                                 strncat(reply, temp, sizeof(reply)-strlen(reply)-1);
-                                //printf("send: %ld bytes\n", send(newsockfd, reply, strlen(reply), 0));
-                                //memset(reply, 0, sizeof(reply));
                             }
                             found += result;
                         }
@@ -277,10 +279,7 @@ void *worker(void *arg)
                 else break;
             }
             if(found == 0)
-            {
                 strncat(reply, "Not found\n", sizeof(reply)-strlen(reply)-1);
-                //memset(reply, 0, sizeof(reply));
-            }
             printf("send: %ld bytes\n", send(newsockfd, reply, strlen(reply), 0));
             memset(reply, 0, sizeof(reply));
             memset(request, 0, sizeof(request));
