@@ -35,13 +35,12 @@ int main(int argc, char *argv[])
         exit(1);
     }
     int ret;
-    char buffer[MAX_LEN], test_str[10];
+    char buffer[MAX_LEN];
     pthread_t pth;
     pthread_create(&pth, NULL, recv_result, NULL);
     while(1)
     {
         memset(buffer, 0, MAX_LEN);
-        memset(test_str, 0, sizeof(test_str));
         readline(buffer);
         ret = format_check(buffer);
         if(ret == 1) 		// send Query
