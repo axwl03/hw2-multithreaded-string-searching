@@ -28,7 +28,16 @@ int main(int argc, char *argv[])
     }
     root = argv[2];
     if(root[strlen(root)-1] == '/')
+    {
         root[strlen(root)-1] = '\0';
+    }
+    DIR *d;
+    if((d = opendir(root)) == NULL)
+    {
+        printf("Could not open %s\n", root);
+        exit(1);
+    }
+    else closedir(d);
     pthread_t pth[atoi(argv[6])];
     pthread_mutex_init(&lock, NULL);
     LIST_INIT(&head);
@@ -202,7 +211,7 @@ void parse_message(int sockfd_temp, char *buffer)
 }
 void *worker(void *arg)
 {
-    char request[129], reply[500], path[100], current_dir[100], temp[100], temp2[100];
+    char request[129], reply[500], path[300], current_dir[300], temp[300], temp2[300];
     int result, found, sockfd_temp;
     DIR *d;
     struct dirent *dir;
@@ -221,7 +230,7 @@ void *worker(void *arg)
             sockfd_temp = head.lh_first->sockfd;
             pop_front();
             pthread_mutex_unlock(&lock);
-            sprintf(reply, "String: \"%s\"\n", request);
+            snprintf(reply, sizeof(reply)-1, "String: \"%s\"\n", request);
             found = 0;
             memset(current_dir, 0, sizeof(current_dir));
             strncpy(current_dir, root, sizeof(current_dir)-1);
@@ -258,7 +267,7 @@ void *worker(void *arg)
                             {
                                 strcpy(temp2, ".");
                                 strncat(temp2, &path[strlen(root)], sizeof(temp2)-2);
-                                sprintf(temp, "File: %s, Count: %d\n", temp2, result);
+                                snprintf(temp, sizeof(temp)-1, "File: %s, Count: %d\n", temp2, result);
                                 strncat(reply, temp, sizeof(reply)-strlen(reply)-1);
                             }
                             found += result;
